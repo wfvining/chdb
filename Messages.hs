@@ -1,10 +1,17 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-module Messages(Connect(..)
-               ,GetDoc(..)
-               ,PutDoc(..))
-       where
+-- | Defines the types used for messages in chdb. 
+--   All exported types are @Serializable@ as they will be sent as messages.
+module Messages
+       ( Connect(..)
+       , GetDoc(..)
+       , PutDoc(..)
+       ) where
 
 import Control.Distributed.Process
+  ( SendPort(..)
+  , ReceivePort(..)
+  , ProcessId(..)
+  )
 import Data.Binary
 import Data.Typeable
 
@@ -14,8 +21,11 @@ import Document
 data Connect = Connect ProcessId deriving (Typeable)
 
 -- | Messages related to Documents
-data GetDoc = GetDoc DocId (SendPort Document) deriving (Typeable)
-data PutDoc = PutDoc Document (SendPort (Maybe DocRevision))
+data GetDoc = GetDoc DocId (SendPort (Maybe Document)) deriving (Typeable)
+data PutDoc = PutDoc Document (SendPort (Maybe DocRevision)) deriving Typeable
+
+-- | Compute a view across all data (MapReduce style?)
+-- data Filter = Filter (Closure (Document -> Bool)) (SendPort 
 
 instance Binary Connect where
   put (Connect pid) = put pid
