@@ -33,16 +33,3 @@ putRequest (PutDoc doc sp) = undefined
 
 -- Will need to be able to spawn servers on remote nodes.
 remotable ['server]
-
-{-
--- | spawned to handle requests from clients.
-requestHandler :: Process ()
-requestHandler =
-  receiveWait [match getRequest, match putRequest] >> requestHandler
-    where getRequest (GetDoc docId sp) = do
-            doc <- liftIO $ readDoc "NONONO!" docId
-            sendChan sp (Just doc) -- XXX:
-          putRequest (PutDoc doc sp)= do
-            -- TODO putDoc 
-            sendChan sp Nothing
--}
