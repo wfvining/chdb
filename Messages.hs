@@ -12,6 +12,7 @@ import Control.Distributed.Process
   , ReceivePort(..)
   , ProcessId(..)
   )
+import Control.Distributed.Static -- ? for Closure... is this right?
 import Data.Binary
 import Data.Typeable
 
@@ -25,7 +26,18 @@ data GetDoc = GetDoc DocId (SendPort (Maybe Document)) deriving (Typeable)
 data PutDoc = PutDoc Document (SendPort (Maybe DocRevision)) deriving Typeable
 
 -- | Compute a view across all data (MapReduce style?)
--- data Filter = Filter (Closure (Document -> Bool)) (SendPort 
+-- NOTE: The way that closure is used here may not be correct.
+data Filter = Filter (Closure (Document -> Bool)) (SendPort [DocId])
+            deriving (Typeable)
+
+instance Binary Filter where
+    put (Filter clo sp) = do
+      put clo
+      put sp
+    get = do
+      clo <- get
+      sp  <- get
+      return (Filter clo sp)
 
 instance Binary Connect where
   put (Connect pid) = put pid

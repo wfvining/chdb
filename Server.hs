@@ -11,18 +11,21 @@ import qualified Data.ByteString as BS
 import Document
 import Messages
 
+-- | The main server process.
+-- /path/ specifies the path to its data files
 server :: String -> Process ()
 server path = forever $ do
   (Connect pid) <- expect
   rPid <- spawnLocal requestHandler
   send pid rPid
 
+-- | spawned to handle requests from clients.
 requestHandler :: Process ()
 requestHandler =
   receiveWait [match getRequest, match putRequest] >> requestHandler
     where getRequest (GetDoc docId sp) = do
-            -- get the document!
-            sendChan sp (Just $ Doc docId 0 BS.empty)
+            doc <- liftIO $ readDoc "NONONO!" docId
+            sendChan sp (Just doc) -- XXX:
           putRequest (PutDoc doc sp)= do
             -- TODO putDoc 
             sendChan sp Nothing
