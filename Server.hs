@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-module Server where
+module Server ( ) where
 
 import Control.Distributed.Process
 import Control.Distributed.Process.Node
@@ -11,13 +11,17 @@ import qualified Data.ByteString as BS
 import Document
 import Messages
 
+-- There are some types that the server needs for internal messages 
+-- that should not be visible to other modules...
+-- The server needs 
+
 -- | The main server process.
 -- /path/ specifies the path to its data files
 server :: String -> Process ()
 server path = forever $ do
-  (Connect pid) <- expect
-  rPid <- spawnLocal requestHandler
-  send pid rPid
+  (Connect clientPid) <- expect
+  handlerPid <- spawnLocal requestHandler
+  send clientPid handlerPid
 
 -- | spawned to handle requests from clients.
 requestHandler :: Process ()
