@@ -15,15 +15,22 @@ import qualified Control.Distributed.Process.Backend.SimpleLocalnet
 import Control.Monad
 
 import qualified Data.ByteString as BS
+import Data.Typeable
+import Data.Binary
 
 import Document
 import Messages
 
--- There are some types that the server needs for internal messages 
--- that should not be visible to other modules...
--- The server needs
+-- | An internal message passed from the slaves to the master
+--   at startup, or whenever a document changes.
+data DocUpdate = DocUpdate DocId DocRevision deriving (Typeable)
 
-data OpResult = IxChange 
+instance Binary DocUpdate where
+  put (DocUpdate did ver) = put did >> put ver
+  get = do
+    did <- get
+    ver <- get
+    return $ DocUpdate did ver
 
 chdbPort = "55989"
 
