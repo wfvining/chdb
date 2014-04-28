@@ -50,8 +50,11 @@ putRequest (PutDoc doc sp) = undefined
 
 -- | Initialize the server, registering it on the local node as 
 -- | chdbServer.
+initServer :: Process ()
+initServer = getSelfPid >>= register "chdbServer" >> server "foo"
+
 startServer :: Process ()
-startServer = getSelfPid >>= register "chdbServer" >> server "foo"
+startServer = undefined
 
 -- Will need to be able to spawn servers on remote nodes.
 remotable ['startServer]
