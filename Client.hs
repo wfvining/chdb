@@ -8,23 +8,37 @@ import Control.Monad (forever)
 
 import Messages
 import Document
+import Server
 
-makeRequest :: String -> Process ()
-makeRequest reqStr = do
-  selfNode <- getLocalNode
-  let (request:args) = words reqStr
-  case request of
-    "get" -> 
+-- XXX: Maybe this should be in a different module.
+chdbRemoteTable = initRemoteTable Server.__remoteTable
+
+-- XXX: 
+get :: Process ()
+get = do
+  srvr <- getServerPid
+  ref  <- monitor srvr
+  -- ...
+  unmonitor ref
+
+-- | request sends a request to the server
+request :: [String] -> IO ()
+request ("get":args) = do
+  backend <- initializeBackend "127.0.0.1" chdbPort chdbRemoteTable
+  forkProcess 
+
+showHelp :: IO ()
+showHelp = putStrLn "type \'bye\' to exit."
+
+clientShell :: IO ()
+clientShell = do
+  putStr "chdb> "
+  c@(command:_) <- fmap words getLine
+  case command of
+    "bye"  -> return ()
+    "help" -> showHelp >> clientShell
+    _      -> request c >> clientShell
               
 
-dispatch :: String -> IO ()
-dispatch input = do
-  let com = head . words $ input
-  return ()
 
-main :: IO ()
-main = forever $ do
-         line <- getLine
-         dispatch line
-         runProcess makeRequest
          
