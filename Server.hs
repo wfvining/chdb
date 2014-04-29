@@ -24,8 +24,6 @@ import System.Directory
 import Document
 import Messages
 
--- | An internal message passed from the slaves to the master
---   at startup, or whenever a document changes.
 data DocStat = DocStat DocId DocRevision deriving (Typeable)
 
 instance Binary DocStat where
@@ -43,6 +41,8 @@ instance Binary DocUpdate where
     ds  <- get
     pid <- get
     return $ DocUpdate ds pid
+    
+data ReqResult = ReqDoc Document | OK | ERROR
 
 chdbPort = "55989"
 chdbPath = "/tmp/" -- Just temproary.
@@ -56,13 +56,40 @@ getDocList = do
   where toDocUpdate :: Document -> DocStat
         toDocUpdate doc = DocStat (docId doc) (revision doc)
 
+getDoc :: DocId -> IO Document
+getDoc did = do
+  let fname = did ++ ".chdb"
+  decodeFile fname
+  
+
 master :: HM.Map DocId (DocRevision, ProcessId) -> Process ()
 master index = undefined
 
+-- | NOTE: returns a Process ReqResult in order to be consistent with
+-- | the other match functions in receiveWait in slave.
+getRequest :: GetDoc -> Process ReqResult
+getRequest (GetDoc did response) = spawnLocal handler >> return OK
+    where handler = do
+            doc <- liftIO $ getDoc did
+            sendChan response $ Just doc -- send the doc to the client.
+
+-- TODO : spawnLocal a process to handle a PutDoc request
+putRequest :: PutDoc -> Process ReqResult
+putRequest = undefined
+
+replicateDoc :: DocUpdate -> Process ReqResult
+replicateDoc = undefined
+
 slave :: ProcessId -> Process ()
 slave mPid = forever $ do
-  n <- expect :: Process Int -- Just filling space
-  liftIO $ print n
+  rslt <- receiveWait [ match putRequest
+                      , match getRequest 
+                      , match replicateDoc ]
+  case rslt of
+    OK    -> slave mPid
+    ERROR -> die "unknown exception" -- We really should never get here.
+    
+  
 
 -- | initialize a slave process by collecing the list of documents
 -- | it has and sending them to the master. 
