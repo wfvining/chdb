@@ -17,6 +17,7 @@ import Control.Monad
 import qualified Data.ByteString as BS
 import Data.Typeable
 import Data.Binary
+import Data.HashMap
 
 import Document
 import Messages
@@ -34,13 +35,22 @@ instance Binary DocUpdate where
 
 chdbPort = "55989"
 
--- | get the Pids of all running servers.
-getServerPids :: Process [ProcessId]
-getServerPids = undefined
+master :: HashMap DocId ProcessId -> Process ()
+master index = undefined 
 
--- | get the process id of a running server.
-getServerPid :: Process ProcessId
-getServerPid = undefined
+initMaster :: [NodeId] -> Process ()
+initMaster slaves = do
+  self <- getSelfPid
+  slavePids <- forM slaves $ \nid -> spawnLink nid ($(mkClosure 'slave) self) 
+  master
+
+slave :: ProcessId -> Process ()
+slave _ = do z <- expect :: (Process Int)
+             liftIO $ print "foo"
+             return ()
+
+handleDocUpdate :: DocUpdate -> Either ProcessId ProcessId
+handleDocUpdate = undefined
 
 -- | The main server process.
 -- /path/ specifies the path to its data files
@@ -64,4 +74,4 @@ startServer :: Process ()
 startServer = undefined
 
 -- Will need to be able to spawn servers on remote nodes.
-remotable ['startServer]
+$(remotable ['slave])
