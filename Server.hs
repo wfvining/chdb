@@ -102,18 +102,23 @@ getRequest (GetDoc did response) = spawnLocal handler
             doc <- liftIO $ getDoc did
             sendChan response $ Just doc -- send the doc to the client.
 
--- TODO : spawnLocal a process to handle a PutDoc request
+-- | Handle a PutDoc request.
 putRequest :: ProcessId -> PutDoc -> Process ProcessId
 putRequest mPid (PutDoc doc resp) = do
-  slPid <- getSelfPid
-  spawnLocal $ handler slPid
+  slPid      <- getSelfPid
+  handlerPid <- spawnLocal (handler slPid)
+  link handlerPid
+  return handlerPid
     where handler slPid = do
-            linkPort resp -- If this process dies, the client should die too.??
             rslt <- liftIO $ putDoc doc
             case rslt of
-              NewVer stat@(DocStat _ rev) -> 
-                  send mPid (DocUpdate stat slPid) >> sendChan resp (Just rev)
-              Conflict -> sendChan resp Nothing
+              NewVer stat@(DocStat _ rev) -> do
+                send mPid (DocUpdate stat slPid)
+                sendChan resp (Right rev)
+                unlink slPid -- XXX
+              Conflict -> do
+                sendChan resp (Left "document version conflict")
+                unlink slPid -- XXX
               _ -> die "unnexpected result"
 
 replicateDoc :: DocUpdate -> Process ProcessId
