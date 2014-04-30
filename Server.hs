@@ -13,7 +13,6 @@ import Control.Distributed.Process.Backend.SimpleLocalnet
 
 import Control.Monad
 
-import qualified Data.ByteString as BS
 import Data.Typeable
 import Data.Binary
 import qualified Data.HashMap as HM
