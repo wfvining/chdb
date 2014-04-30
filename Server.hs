@@ -96,18 +96,17 @@ master index = undefined
 
 -- | NOTE: returns a Process ReqResult in order to be consistent with
 -- | the other match functions in receiveWait in slave.
-getRequest :: GetDoc -> Process ReqResult
-getRequest (GetDoc did response) = spawnLocal handler >> return OK
+getRequest :: GetDoc -> Process ProcessId
+getRequest (GetDoc did response) = spawnLocal handler
     where handler = do
             doc <- liftIO $ getDoc did
             sendChan response $ Just doc -- send the doc to the client.
 
 -- TODO : spawnLocal a process to handle a PutDoc request
-putRequest :: ProcessId -> PutDoc -> Process ReqResult
+putRequest :: ProcessId -> PutDoc -> Process ProcessId
 putRequest mPid (PutDoc doc resp) = do
   slPid <- getSelfPid
   spawnLocal $ handler slPid
-  return OK
     where handler slPid = do
             linkPort resp -- If this process dies, the client should die too.??
             rslt <- liftIO $ putDoc doc
@@ -117,7 +116,7 @@ putRequest mPid (PutDoc doc resp) = do
               Conflict -> sendChan resp Nothing
               _ -> die "unnexpected result"
 
-replicateDoc :: DocUpdate -> Process ReqResult
+replicateDoc :: DocUpdate -> Process ProcessId
 replicateDoc = undefined
 
 slave :: ProcessId -> Process ()
