@@ -110,15 +110,13 @@ putRequest mPid (PutDoc doc resp) = do
   spawnLocal $ handler slPid
   return OK
     where handler slPid = do
-            linkPort resp -- If this process dies, the client should die too.
+            linkPort resp -- If this process dies, the client should die too.??
             rslt <- liftIO $ putDoc doc
             case rslt of
               NewVer stat@(DocStat _ rev) -> 
                   send mPid (DocUpdate stat slPid) >> sendChan resp (Just rev)
               Conflict -> sendChan resp Nothing
               _ -> die "unnexpected result"
-
--- undefined -- Should the slave send NewVer directly to the master??? I think yes. also, maybe make Process ReqResult a Process ()
 
 replicateDoc :: DocUpdate -> Process ReqResult
 replicateDoc = undefined
