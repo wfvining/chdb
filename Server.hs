@@ -70,7 +70,7 @@ putNewDoc (Doc did _ contents) = do
   return $ NewVer (DocStat did newDocVersion)
     where newDocVersion = 1
 
--- TODO: verify that this cannot leav the data in an inconsistenyt state.
+-- TODO: verify that this cannot leave the data in an inconsistenyt state.
 updateDoc :: Document -> IO ReqResult
 updateDoc (Doc did ver contents) = do
   (Doc _ ver' _) <- decodeFile $ docId2File did
@@ -104,23 +104,31 @@ getRequest (GetDoc did response) = spawnLocal handler >> return OK
             sendChan response $ Just doc -- send the doc to the client.
 
 -- TODO : spawnLocal a process to handle a PutDoc request
-putRequest :: PutDoc -> Process ReqResult
-putRequest (PutDoc doc response) = undefined -- Should the slave send NewVer directly to the master??? I think yes. also, maybe make Process ReqResult a Process ()
+putRequest :: ProcessId -> PutDoc -> Process ReqResult
+putRequest mPid (PutDoc doc resp) = do
+  slPid <- getSelfPid
+  spawnLocal $ handler slPid
+  return OK
+    where handler slPid = do
+            linkPort resp
+            rslt <- liftIO $ putDoc doc
+            case rslt of
+              NewVer stat@(DocStat _ rev) -> 
+                  send mPid (DocUpdate stat slPid) >> sendChan resp (Just rev)
+              Conflict -> sendChan resp Nothing
+              _ -> die "unnexpected result"
+
+-- undefined -- Should the slave send NewVer directly to the master??? I think yes. also, maybe make Process ReqResult a Process ()
 
 replicateDoc :: DocUpdate -> Process ReqResult
 replicateDoc = undefined
 
 slave :: ProcessId -> Process ()
-slave mPid = forever $ do
-  rslt <- receiveWait [ match putRequest
-                      , match getRequest 
-                      , match replicateDoc ]
-  case rslt of
-    OK    -> slave mPid
-    ERROR -> die "unknown exception" -- We really should never get here.
-    
+slave mPid = forever $
+  receiveWait [ match (putRequest mPid)
+              , match getRequest 
+              , match replicateDoc ]
   
-
 -- | initialize a slave process by collecing the list of documents
 -- | it has and sending them to the master. 
 initSlave :: ProcessId -> Process ()
@@ -130,7 +138,8 @@ initSlave mPid = do
   forM_ docls $ \du -> send mPid (DocUpdate du self)
   slave mPid
 
-remotable ['initSlave] -- XXX: Does slave need to be remotable?
+-- remotable needs to come before any use of mkClosure
+remotable ['initSlave]
 
 initMaster :: [NodeId] -> Process ()
 initMaster slaves = do
