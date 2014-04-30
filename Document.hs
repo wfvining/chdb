@@ -16,7 +16,7 @@ type DocRevision = Int
 
 data Document = Doc { docId :: DocId
                     , revision :: DocRevision
-                    , contents :: BS.ByteString} -- TODO: decide on a representation. BS may not be what I really want.
+                    , contents :: BS.ByteString}
               deriving (Show, Typeable)
 
 -- A Document needs to be serializable.

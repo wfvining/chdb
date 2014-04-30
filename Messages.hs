@@ -2,8 +2,7 @@
 -- | Defines the types used for messages in chdb. 
 --   All exported types are @Serializable@ as they will be sent as messages.
 module Messages
-       ( Connect(..)
-       , GetDoc(..)
+       ( GetDoc(..)
        , PutDoc(..)
        ) where
 
@@ -17,9 +16,6 @@ import Data.Binary
 import Data.Typeable
 
 import Document
-
--- | The initial message to establish a connection between a client and a server
-data Connect = Connect ProcessId deriving (Typeable)
 
 -- | Messages related to Documents
 data GetDoc = GetDoc DocId (SendPort (Maybe Document)) deriving (Typeable)
@@ -38,12 +34,6 @@ instance Binary Filter where
       clo <- get
       sp  <- get
       return (Filter clo sp)
-
-instance Binary Connect where
-  put (Connect pid) = put pid
-  get = do
-    pid <- get
-    return (Connect pid)
 
 instance Binary GetDoc where
   put (GetDoc dID sp) = do
