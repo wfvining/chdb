@@ -42,7 +42,7 @@ instance Binary DocUpdate where
     pid <- get
     return $ DocUpdate ds pid
     
-data ReqResult = ReqDoc Document | OK | ERROR
+data ReqResult = NewVer DocStat | Conflict | OK | ERROR
 
 chdbPort = "55989"
 chdbPath = "/tmp/" -- Just temproary.
@@ -56,11 +56,41 @@ getDocList = do
   where toDocUpdate :: Document -> DocStat
         toDocUpdate doc = DocStat (docId doc) (revision doc)
 
+docId2File :: DocId -> FilePath
+docId2File did = chdbPath ++ did ++ ".chdb"
+
+-- | Read a chdb document from file.
 getDoc :: DocId -> IO Document
-getDoc did = do
-  let fname = did ++ ".chdb"
-  decodeFile fname
-  
+getDoc = decodeFile . docId2File
+
+-- | Store a new document.
+putNewDoc :: Document -> IO ReqResult
+putNewDoc (Doc did _ contents) = do
+  encodeFile (docId2File did) (Doc did newDocVersion contents)
+  return $ NewVer (DocStat did newDocVersion)
+    where newDocVersion = 1
+
+-- TODO: verify that this cannot leav the data in an inconsistenyt state.
+updateDoc :: Document -> IO ReqResult
+updateDoc (Doc did ver contents) = do
+  (Doc _ ver' _) <- decodeFile $ docId2File did
+  if ver' /= ver 
+    then return Conflict 
+    else do 
+         let tmpName = (docId2File did) ++ ".tmp"
+             newVer  = succ ver
+         encodeFile tmpName (Doc did newVer contents)
+         renameFile tmpName $ docId2File did            
+         return $ NewVer (DocStat did newVer)
+
+doesDocExist :: Document -> IO Bool
+doesDocExist (Doc did _ _) = doesFileExist $ docId2File did
+
+-- | handle a PutDoc request.
+putDoc :: Document -> IO ReqResult
+putDoc doc = do
+  fileExists <- doesDocExist doc
+  if fileExists then updateDoc doc else putNewDoc doc
 
 master :: HM.Map DocId (DocRevision, ProcessId) -> Process ()
 master index = undefined
@@ -75,7 +105,7 @@ getRequest (GetDoc did response) = spawnLocal handler >> return OK
 
 -- TODO : spawnLocal a process to handle a PutDoc request
 putRequest :: PutDoc -> Process ReqResult
-putRequest = undefined
+putRequest (PutDoc doc response) = undefined -- Should the slave send NewVer directly to the master??? I think yes. also, maybe make Process ReqResult a Process ()
 
 replicateDoc :: DocUpdate -> Process ReqResult
 replicateDoc = undefined
