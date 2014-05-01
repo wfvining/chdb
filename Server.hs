@@ -23,6 +23,10 @@ import System.Directory
 import Document
 import Messages
 
+-- Internal messages, used only by non-client processes (they stay within
+-- this module).
+
+-- | Gives information about the current version of a document.
 data DocStat = DocStat DocId DocRevision deriving (Typeable)
 
 instance Binary DocStat where
@@ -32,6 +36,8 @@ instance Binary DocStat where
     ver <- get
     return $ DocStat did ver
 
+-- | Gives imformation about the current version of a document accessible
+-- | from a specific Process.
 data DocUpdate = DocUpdate DocStat ProcessId deriving (Typeable)
 
 instance Binary DocUpdate where
@@ -41,8 +47,7 @@ instance Binary DocUpdate where
     pid <- get
     return $ DocUpdate ds pid
     
-data ReqResult = NewVer DocStat | Conflict | OK | ERROR
-
+-- | Messages for triggering document replication.
 data Replicate = SendTo DocId ProcessId
                | Replica Document
                deriving (Typeable)
@@ -50,10 +55,25 @@ data Replicate = SendTo DocId ProcessId
 instance Binary Replicate where
     put (SendTo did pid) = putWord8 0 >> put did >> put pid
     put (Replica doc)    = putWord8 1 >> put doc
-    get = get -- XXX
+    get = do
+      n <- getWord8
+      case n of
+        0 -> do
+          did <- get
+          pid <- get
+          return $ SendTo did pid
+        1 -> do
+          doc <- get
+          return $ Replica doc
 
+-- non-message types.
+
+-- | Defines the result of an attempt to store a document.
+data ReqResult = NewVer DocStat | Conflict
+
+-- Constants
 chdbPort = "55989"
-chdbPath = "/tmp/" -- Just temproary.
+chdbPath = "/tmp/" -- XXX: temproary.
 chdbServerName = "chdbMaster"
 
 getDocList :: IO [DocStat]
@@ -114,8 +134,8 @@ getRequest (GetDoc did response) = spawnLocal handler
 -- | Handle a PutDoc request.
 putRequest :: ProcessId -> PutDoc -> Process ProcessId
 putRequest mPid (PutDoc doc resp) = do
-  slPid      <- getSelfPid
-  handlerPid <- spawnLocal (handler slPid)
+  self       <- getSelfPid
+  handlerPid <- spawnLocal $ handler self
   link handlerPid
   return handlerPid
     where handler slPid = do
@@ -128,10 +148,30 @@ putRequest mPid (PutDoc doc resp) = do
               Conflict -> do
                 sendChan resp (Left "document version conflict")
                 unlink slPid -- XXX
-              _ -> die "unnexpected result"
 
+-- | Handle a document replication request.
+--   TODO: There is no confirmation that the replication succeeded, might 
+--   want to implement that.
 replicateDoc :: Replicate -> Process ProcessId
-replicateDoc = undefined
+replicateDoc (SendTo did pid) = do
+  self <- getSelfPid
+  hPid <- spawnLocal $ sendHandler self
+  link hPid
+  return hPid
+    where sendHandler slPid = do
+            doc <- liftIO $ getDoc did -- XXX: Should I use a bang pattern here?
+            send pid (Replica doc)
+            unlink slPid
+replicateDoc (Replica doc) = do
+  self <- getSelfPid
+  pid  <- spawnLocal $ receiveHandler self
+  link pid -- XXX: maybe linking after pid is done...
+  return pid
+    where receiveHandler slPid = do
+            rslt <- liftIO $ putDoc doc
+            case rslt of
+              NewVer _ -> unlink slPid -- unlink and finish.
+              Conflict -> die "replication conflict."
 
 slave :: ProcessId -> Process ()
 slave mPid = forever $
