@@ -19,7 +19,8 @@ import Document
 
 -- | Messages related to Documents
 data GetDoc = GetDoc DocId (SendPort (Maybe Document)) deriving (Typeable)
-data PutDoc = PutDoc Document (SendPort (Maybe DocRevision)) deriving Typeable
+data PutDoc = PutDoc Document (SendPort (Either String DocRevision)) 
+            deriving Typeable
 
 -- | Compute a view across all data (MapReduce style?)
 -- NOTE: The way that closure is used here may not be correct.
