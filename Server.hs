@@ -78,8 +78,7 @@ chdbServerName = "chdbMaster"
 
 getDocList :: IO [DocStat]
 getDocList = do
-  dirc <- getDirectoryContents chdbPath
-  let docs = filter (isSuffixOf ".chdb") dirc
+  docs <- fmap (filter (isSuffixOf ".chdb")) $ getDirectoryContents chdbPath
   fmap (map toDocUpdate) $ forM docs decodeFile
   where toDocUpdate :: Document -> DocStat
         toDocUpdate doc = DocStat (docId doc) (revision doc)
