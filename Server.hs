@@ -43,6 +43,15 @@ instance Binary DocUpdate where
     
 data ReqResult = NewVer DocStat | Conflict | OK | ERROR
 
+data Replicate = SendTo DocId ProcessId
+               | Replica Document
+               deriving (Typeable)
+
+instance Binary Replicate where
+    put (SendTo did pid) = putWord8 0 >> put did >> put pid
+    put (Replica doc)    = putWord8 1 >> put doc
+    get = get -- XXX
+
 chdbPort = "55989"
 chdbPath = "/tmp/" -- Just temproary.
 chdbServerName = "chdbMaster"
@@ -69,7 +78,7 @@ putNewDoc (Doc did _ contents) = do
   return $ NewVer (DocStat did newDocVersion)
     where newDocVersion = 1
 
--- TODO: verify that this cannot leave the data in an inconsistenyt state.
+-- TODO: verify that this cannot leave the data in an inconsistent state.
 updateDoc :: Document -> IO ReqResult
 updateDoc (Doc did ver contents) = do
   (Doc _ ver' _) <- decodeFile $ docId2File did
@@ -121,7 +130,7 @@ putRequest mPid (PutDoc doc resp) = do
                 unlink slPid -- XXX
               _ -> die "unnexpected result"
 
-replicateDoc :: DocUpdate -> Process ProcessId
+replicateDoc :: Replicate -> Process ProcessId
 replicateDoc = undefined
 
 slave :: ProcessId -> Process ()
