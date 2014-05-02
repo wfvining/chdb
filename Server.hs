@@ -187,14 +187,26 @@ initSlave mPid = do
 -- remotable needs to come before any use of mkClosure
 remotable ['initSlave]
 
-master :: HM.Map DocId (DocRevision, [ProcessId]) -> Process ()
-master index = do
-  expectTimeout 
+type DocumentIndex = HM.Map DocId (DocRevision, [ProcessId])
+
+updateIndex :: DocumentIndex -> DocUpdate -> DocumentIndex
+updateIndex = undefined
+
+master :: DocumentIndex -> [ProcessId] -> Process ()
+master index slaves = do
+  receiveWait [ match docUpdate
+              , match docGetRequest
+              , match docPutRequest ]
+    where docUpdate du  = master (updateIndex index du) slaves -- Is this a tail call?
+          docGetRequest :: GetDoc -> Process ()
+          docGetRequest = undefined
+          docPutRequest :: PutDoc -> Process ()
+          docPutRequest = undefined
            
 initMaster :: [NodeId] -> Process ()
 initMaster slaves = do
   self <- getSelfPid
   slavePids <- forM slaves $ \nid ->
     spawnLink nid ($(mkClosure 'initSlave) self) 
-  master HM.empty
+  master HM.empty slavePids
 
