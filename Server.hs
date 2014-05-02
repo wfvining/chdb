@@ -119,9 +119,6 @@ putDoc doc = do
   fileExists <- doesDocExist doc
   if fileExists then updateDoc doc else putNewDoc doc
 
-master :: HM.Map DocId (DocRevision, ProcessId) -> Process ()
-master index = undefined
-
 -- | NOTE: returns a Process ReqResult in order to be consistent with
 -- | the other match functions in receiveWait in slave.
 getRequest :: GetDoc -> Process ProcessId
@@ -190,6 +187,10 @@ initSlave mPid = do
 -- remotable needs to come before any use of mkClosure
 remotable ['initSlave]
 
+master :: HM.Map DocId (DocRevision, [ProcessId]) -> Process ()
+master index = do
+  expectTimeout 
+           
 initMaster :: [NodeId] -> Process ()
 initMaster slaves = do
   self <- getSelfPid
