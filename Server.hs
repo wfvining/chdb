@@ -190,7 +190,13 @@ remotable ['initSlave]
 type DocumentIndex = HM.Map DocId (DocRevision, [ProcessId])
 
 updateIndex :: DocumentIndex -> DocUpdate -> DocumentIndex
-updateIndex = undefined
+updateIndex index (DocUpdate (DocStat did ver) pid) = 
+    if HM.member did index
+    then HM.insertWith insDuplicate did (ver, [pid]) index
+    else HM.insert did (ver, [pid]) index
+        where insDuplicate (newVer, ps) (oldVer, ps')
+                  | newVer > oldVer = (newVer, ps ++ ps')
+                  | otherwise       = (oldVer, ps' ++ ps)
 
 master :: DocumentIndex -> [ProcessId] -> Process ()
 master index slaves = do
