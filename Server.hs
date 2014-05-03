@@ -22,6 +22,7 @@ import System.Directory
 
 import Document
 import Messages
+import CircularQueue
 
 -- Internal messages, used only by non-client processes (they stay within
 -- this module).
@@ -198,21 +199,35 @@ updateIndex index (DocUpdate (DocStat did ver) pid) =
                   | newVer > oldVer = (newVer, ps ++ ps')
                   | otherwise       = (oldVer, ps' ++ ps)
 
-master :: DocumentIndex -> [ProcessId] -> Process ()
+master :: DocumentIndex -> CircularQueue ProcessId -> Process ()
 master index slaves = do
-  receiveWait [ match docUpdate
-              , match docGetRequest
-              , match docPutRequest ]
-    where docUpdate du  = master (updateIndex index du) slaves -- Is this a tail call?
-          docGetRequest :: GetDoc -> Process ()
-          docGetRequest = undefined
-          docPutRequest :: PutDoc -> Process ()
-          docPutRequest = undefined
+  (index', slaves') <- receiveWait [ match docUpdate
+                                   , match docGetRequest
+                                   , match docPutRequest ]
+  master index' slaves'
+    where docUpdate :: DocUpdate -> 
+                       Process (DocumentIndex, CircularQueue ProcessId)
+          docUpdate du  = return ((updateIndex index du), slaves)
+          
+          docGetRequest :: GetDoc -> 
+                           Process (DocumentIndex, CircularQueue ProcessId)
+          docGetRequest get@(GetDoc did resp) =
+            case HM.lookup did index of
+              (Just (_, (p:_))) -> send p get >> return (index, slaves)
+              Nothing           -> 
+                sendChan resp Nothing >> return (index, slaves)
+          
+          docPutRequest :: PutDoc -> 
+                           Process (DocumentIndex, CircularQueue ProcessId)
+          docPutRequest put@(PutDoc doc resp) =
+            case HM.lookup (docId doc) index of
+              Just (_, (p:_)) -> send p put >> return (index, slaves)
+              Nothing         -> undefined
            
 initMaster :: [NodeId] -> Process ()
 initMaster slaves = do
   self <- getSelfPid
   slavePids <- forM slaves $ \nid ->
     spawnLink nid ($(mkClosure 'initSlave) self) 
-  master HM.empty slavePids
+  master HM.empty $ toCircularQueue slavePids
 
