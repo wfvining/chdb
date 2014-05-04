@@ -3,6 +3,7 @@
 module Server 
     ( chdbPort
     , chdbServerName
+    , initMaster
     , __remoteTable
     ) where
 
@@ -200,11 +201,10 @@ updateIndex index (DocUpdate (DocStat did ver) pid) =
                   | otherwise       = (oldVer, ps' ++ ps)
 
 master :: DocumentIndex -> CircularQueue ProcessId -> Process ()
-master index slaves = do
-  (index', slaves') <- receiveWait [ match docUpdate
-                                   , match docGetRequest
-                                   , match docPutRequest ]
-  master index' slaves'
+master index slaves =
+  receiveWait [ match docUpdate
+              , match docGetRequest
+              , match docPutRequest ] >>= (uncurry master)
     where docUpdate :: DocUpdate -> 
                        Process (DocumentIndex, CircularQueue ProcessId)
           docUpdate du  = return ((updateIndex index du), slaves)
@@ -222,7 +222,9 @@ master index slaves = do
           docPutRequest put@(PutDoc doc resp) =
             case HM.lookup (docId doc) index of
               Just (_, (p:_)) -> send p put >> return (index, slaves)
-              Nothing         -> undefined
+              Nothing         ->
+                let (p, slaves') = next slaves in
+                send p put >> return (index, slaves')
            
 initMaster :: [NodeId] -> Process ()
 initMaster slaves = do
