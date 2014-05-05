@@ -9,9 +9,7 @@ module Server
     ) where
 
 import Control.Distributed.Process
-import Control.Distributed.Process.Node
 import Control.Distributed.Process.Closure
-import Control.Distributed.Process.Backend.SimpleLocalnet
 
 import Control.Monad
 
@@ -232,6 +230,7 @@ master index slaves =
 initMaster :: [NodeId] -> Process ()
 initMaster slaves = do
   self <- getSelfPid
+  register chdbServerName self
   say $ "starting slaves on: " ++ (show slaves)
   slavePids <- forM slaves $ \nid ->
     spawnLink nid ($(mkClosure 'initSlave) self)
