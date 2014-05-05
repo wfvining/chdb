@@ -3,10 +3,15 @@
 -- The client defines a simple interactive shell from which a user can
 -- do simple things with simple documents. It is really just for
 -- testing/demonstrating.
+-- 
+-- Will Vining
+-- Cinco de Mayo 2014
 module Client
        ( clientShell 
        , chdbClientPort )
        where
+
+import System.IO
 
 import Control.Distributed.Process
 import Control.Distributed.Process.Node
@@ -65,7 +70,7 @@ findChdbMaster nodes = do
   forM_ nodes $ \nid -> whereisRemoteAsync nid chdbServerName
   expectWhereisReply
     where expectWhereisReply = do
-            reply <- expectTimeout 2000 -- XXX: not sure what the units are...
+            reply <- expectTimeout 200000 -- XXX: not sure what the units are...
             case reply of
               Just (WhereIsReply chdbServerName (Just pid)) -> 
                 return $ Just pid
@@ -76,6 +81,8 @@ findChdbMaster nodes = do
 shell :: [NodeId] -> Process ()
 shell nodes = do
   (Just chdbMaster) <- findChdbMaster nodes
+  liftIO $ putStrLn "connected!"
+  liftIO $ hSetBuffering stdout NoBuffering
   interactiveShell chdbMaster
     where interactiveShell :: ProcessId -> Process ()
           interactiveShell master = do
@@ -91,5 +98,24 @@ clientShell host = do
   backend <- initializeBackend host chdbClientPort initRemoteTable
   node <- SLn.newLocalNode backend
   peers <- SLn.findPeers backend 500
+  putStrLn "running client process"
   runProcess node (shell peers)
-              
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
