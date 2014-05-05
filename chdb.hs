@@ -3,25 +3,26 @@ module Main where
 import System.Environment
 
 import Control.Distributed.Process.Node
-import Control.Distriubted.Process.Backend.SimpleLocalnet
+import Control.Distributed.Process.Backend.SimpleLocalnet
 
 import Server
 
-nodes = ["127.0.0.1"]
+chdbRemoteTable = Server.__remoteTable initRemoteTable
 
-dispatch :: String -> IO ()
-dispatch "server" = do
+dispatch :: [String] -> IO ()
+-- set up a slave node that will wait for the master to spawn a process on it.
+dispatch ["slave", host]  = 
+  initializeBackend host chdbSlavePort chdbRemoteTable >>= startSlave
+dispatch ["master", host] = do
+  backend <- initializeBackend host chdbMasterPort chdbRemoteTable
+  startMaster backend initMaster
   putStrLn "Starting server"
-  -- Initialize nodes
-  backend <- initializeBackend "127.0.0.1" chdbPort $ 
-             initRemotetable Server.__remoteTable
-  nodes <- get
-  forkProcess (initMaster slaveNodes)
-dispatch "" = do
+  -- todo, find slave NodeIds, spawn Server.master.
+dispatch [""] = do
   putStrLn "starting chdb client"
   -- Run a client.
 
 main :: IO ()
-main = do
-  [arg] <- getArgs
-  dispatch arg
+main = do 
+  args <- getArgs 
+  dispatch args

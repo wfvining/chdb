@@ -1,7 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell #-}
 module Server 
-    ( chdbPort
+    ( chdbMasterPort
+    , chdbSlavePort
     , chdbServerName
     , initMaster
     , __remoteTable
@@ -74,7 +75,8 @@ instance Binary Replicate where
 data ReqResult = NewVer DocStat | Conflict
 
 -- Constants
-chdbPort = "55989"
+chdbMasterPort = "55989"
+chdbSlavePort  = "55990"
 chdbPath = "/tmp/" -- XXX: temproary.
 chdbServerName = "chdbMaster"
 
@@ -184,6 +186,7 @@ initSlave mPid = do
   self  <- getSelfPid
   docls <- liftIO $ getDocList
   forM_ docls $ \du -> send mPid (DocUpdate du self)
+  say $ "slave started on " ++ (show self)
   slave mPid
 
 -- remotable needs to come before any use of mkClosure
@@ -229,7 +232,9 @@ master index slaves =
 initMaster :: [NodeId] -> Process ()
 initMaster slaves = do
   self <- getSelfPid
+  say $ "starting slaves on: " ++ (show slaves)
   slavePids <- forM slaves $ \nid ->
-    spawnLink nid ($(mkClosure 'initSlave) self) 
+    spawnLink nid ($(mkClosure 'initSlave) self)
+  say "starting master"
   master HM.empty $ toCircularQueue slavePids
 
