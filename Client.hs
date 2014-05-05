@@ -15,11 +15,19 @@ import Messages
 import Document
 import Server
 
+-- | simple 
+data RequestResult = OK | Fail | Got Document
+
+instance Show RequestResult where
+  show OK = "ok"
+  show Fail = "fail"
+  show (Got doc) = show doc
+
 chdbClientPort = "55991"
 
 getServerPid = undefined
 
-get :: Process ()
+get :: Process (Maybe Document)
 get = undefined
 
 put :: Process ()
@@ -32,12 +40,12 @@ request ("get":args) = do
   forkProcess 
 -}
 
-request :: [String] -> IO ()
-request ["get", docId] = undefined
-request ("put":args)
+request :: [String] -> ProcessId -> Process RequestResult
+request ["get", docId] mPid = undefined
+request ("put":args) mPid
   | length args == 2 = undefined -- attempt to store a new document.
   | length args == 3 = undefined -- attempt to update an existing document.
-  | otherwise = showHelp
+  | otherwise = liftIO $ showHelp >> return Fail
 
 showHelp :: IO ()
 showHelp = do
@@ -67,8 +75,11 @@ shell nodes = do
     where interactiveShell :: ProcessId -> Process ()
           interactiveShell master = do
             liftIO $ putStr "chdb> "
-            command <- fmap words $ liftIO getLine
-            liftIO $ request command -- XXX
+            command@(c:_) <- fmap words $ liftIO getLine
+            if c == "bye" then return () else do
+              rslt <- request command master
+              liftIO $ print rslt
+              interactiveShell master
 
 clientShell :: String -> IO ()
 clientShell host = do
