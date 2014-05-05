@@ -1,4 +1,9 @@
-module Client 
+-- | The chdb client.
+-- 
+-- The client defines a simple interactive shell from which a user can
+-- do simple things with simple documents. It is really just for
+-- testing/demonstrating.
+module Client
        ( clientShell 
        , chdbClientPort )
        where
@@ -15,7 +20,7 @@ import Messages
 import Document
 import Server
 
--- | simple 
+-- | the possible results of any client request.
 data RequestResult = OK | Fail | Got Document
 
 instance Show RequestResult where
