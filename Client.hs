@@ -105,9 +105,9 @@ shell nodes = do
                 liftIO $ print rslt
                 interactiveShell master
 
-clientShell :: String -> IO ()
-clientShell host = do
-  backend <- initializeBackend host chdbClientPort initRemoteTable
+clientShell :: String -> String -> IO ()
+clientShell host port = do
+  backend <- initializeBackend host port initRemoteTable
   node <- SLn.newLocalNode backend
   peers <- SLn.findPeers backend 500
   putStrLn "running client process"

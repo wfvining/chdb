@@ -28,20 +28,20 @@ import Client
 
 chdbRemoteTable = Server.__remoteTable initRemoteTable
 
-dispatch :: String -> String -> IO ()
+dispatch :: String -> String -> [String] -> IO ()
 -- set up a slave node that will wait for the master to spawn a process on it.
-dispatch "slave"  host = 
+dispatch "slave"  host _ = 
   initializeBackend host chdbSlavePort chdbRemoteTable >>= startSlave
-dispatch "master" host = do
+dispatch "master" host _ = do
   putStrLn "Starting server"
   backend <- initializeBackend host chdbMasterPort chdbRemoteTable
   startMaster backend initMaster
   -- todo, find slave NodeIds, spawn Server.master.
-dispatch "client" host = do
+dispatch "client" host [port] = do
   putStrLn "starting chdb client"
-  clientShell host
+  clientShell host port
 
 main :: IO ()
 main = do 
-  [command, host] <- getArgs 
-  dispatch command host
+  (command:host:args) <- getArgs 
+  dispatch command host args
