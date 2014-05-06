@@ -3,11 +3,12 @@ module Document
     ( DocId
     , DocRevision
     , Document(..)
-    , readDoc
-    , writeDoc 
+    , mkNewDocument
+    , mkDocument
     ) where 
 
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as C8
 import Data.Typeable
 import Data.Binary
 
@@ -28,10 +29,14 @@ instance Binary Document where
       contents <- get
       return (Doc id rev contents)
 
--- | Write a @Document@ to file.
-readDoc :: String -> DocId -> IO Document
-readDoc path dId = decodeFile (path ++ dId)
+mkDocument :: String -> String -> String -> Document
+mkDocument sDid sVersion sContents = Doc { docId    = sDid
+                                         , revision = read sVersion
+                                         , contents = C8.pack sContents }
 
--- | Read a @Document@ from file.
-writeDoc :: String -> Document -> IO ()
-writeDoc path doc@(Doc docId _ _) = encodeFile (path ++ docId) doc
+mkNewDocument :: String -> String -> Document
+mkNewDocument sDid sContents = Doc { docId    = sDid
+                                   , revision = newDocRevision
+                                   , contents = C8.pack sContents }
+  -- This must be less than 1, or there could be unhandled conflicts.
+  where newDocRevision = -1

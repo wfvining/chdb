@@ -33,29 +33,38 @@ instance Show RequestResult where
   show Fail = "fail"
   show (Got doc) = show doc
 
+-- | the client runs on its own node, which may or may not host
+-- another chdb node, so it needs its own port.
 chdbClientPort = "55991"
 
-getServerPid = undefined
-
-get :: Process (Maybe Document)
-get = undefined
-
-put :: Process ()
-put = undefined
-
--- | request sends a request to the server
-{-request :: [String] -> IO ()
-request ("get":args) = do
-  backend <- initializeBackend "127.0.0.1" chdbSlavePort chdbRemoteTable
-  forkProcess 
--}
-
+-- | send a request to the server
 request :: [String] -> ProcessId -> Process RequestResult
-request ["get", docId] mPid = undefined
-request ("put":args) mPid
-  | length args == 2 = undefined -- attempt to store a new document.
-  | length args == 3 = undefined -- attempt to update an existing document.
-  | otherwise = liftIO $ showHelp >> return Fail
+request ["get", did]                mPid = do
+  (sport, rport) <- newChan
+  send mPid $ GetDoc did sport
+  mdoc <- receiveChan rport
+  case mdoc of
+    Just doc -> return $ Got doc
+    Nothing  -> return Fail
+request ["put", did, contents]      mPid = do
+  (sport, rport) <- newChan
+  send mPid $ PutDoc (mkNewDocument did contents) sport
+  rslt <- receiveChan rport
+  case rslt of
+    Left errorMessage -> (liftIO $ putStrLn errorMessage)     >> return Fail
+    Right docRevision -> 
+      (liftIO . putStrLn $ "stored " 
+       ++ (show did) ++ " at version " ++ (show docRevision)) >> return OK
+request ["put", did, ver, contents] mPid = do
+  (sport, rport) <- newChan
+  send mPid $ PutDoc (mkDocument did ver contents) sport
+  rslt <- receiveChan rport
+  case rslt of
+    Left errorMessage -> (liftIO $ putStrLn errorMessage) >> return Fail
+    Right docRevision ->
+      (liftIO . putStrLn $ "updated " 
+       ++ (show did) ++ " to " ++ (show docRevision))     >> return OK
+request _                           _    = (liftIO $ showHelp) >> return Fail
 
 showHelp :: IO ()
 showHelp = do
@@ -81,17 +90,20 @@ findChdbMaster nodes = do
 shell :: [NodeId] -> Process ()
 shell nodes = do
   (Just chdbMaster) <- findChdbMaster nodes
-  liftIO $ putStrLn "connected!"
+  link chdbMaster
+  liftIO . putStrLn $ "connected! (master: " ++ (show chdbMaster) ++ ")"
   liftIO $ hSetBuffering stdout NoBuffering
   interactiveShell chdbMaster
     where interactiveShell :: ProcessId -> Process ()
           interactiveShell master = do
             liftIO $ putStr "chdb> "
-            command@(c:_) <- fmap words $ liftIO getLine
-            if c == "bye" then return () else do
-              rslt <- request command master
-              liftIO $ print rslt
-              interactiveShell master
+            command <- fmap words $ liftIO getLine
+            case command of
+              []    -> interactiveShell master
+              (c:_) -> if c == "bye" then return () else do
+                rslt <- request command master
+                liftIO $ print rslt
+                interactiveShell master
 
 clientShell :: String -> IO ()
 clientShell host = do
@@ -100,22 +112,3 @@ clientShell host = do
   peers <- SLn.findPeers backend 500
   putStrLn "running client process"
   runProcess node (shell peers)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -1,6 +1,6 @@
 -- | The amazing CloudHaskell Database!
 -- The main driver for chdb.
--- To start chdb, fisrst start slave nodes by running
+-- To start chdb, first start slave nodes by running
 -- 
 -- > ./chdb slave <ip address to listen on>
 -- 
@@ -28,21 +28,20 @@ import Client
 
 chdbRemoteTable = Server.__remoteTable initRemoteTable
 
-dispatch :: [String] -> IO ()
+dispatch :: String -> String -> IO ()
 -- set up a slave node that will wait for the master to spawn a process on it.
-dispatch ["slave", host]  = 
+dispatch "slave"  host = 
   initializeBackend host chdbSlavePort chdbRemoteTable >>= startSlave
-dispatch ["master", host] = do
+dispatch "master" host = do
   putStrLn "Starting server"
   backend <- initializeBackend host chdbMasterPort chdbRemoteTable
   startMaster backend initMaster
   -- todo, find slave NodeIds, spawn Server.master.
-dispatch ["client", host] = do
+dispatch "client" host = do
   putStrLn "starting chdb client"
-  backend <- initializeBackend host chdbClientPort chdbRemoteTable
-  clientShell -- host
+  clientShell host
 
 main :: IO ()
 main = do 
-  args <- getArgs 
-  dispatch args
+  [command, host] <- getArgs 
+  dispatch command host
