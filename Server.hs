@@ -28,7 +28,7 @@ import CircularQueue
 -- this module).
 
 -- | Gives information about the current version of a document.
-data DocStat = DocStat DocId DocRevision deriving (Typeable)
+data DocStat = DocStat DocId DocRevision deriving (Typeable, Show)
 
 instance Binary DocStat where
   put (DocStat did ver) = put did >> put ver
@@ -81,9 +81,9 @@ chdbServerName = "chdbMaster"
 getDocList :: IO [DocStat]
 getDocList = do
   docs <- fmap (filter (isSuffixOf ".chdb")) $ getDirectoryContents chdbPath
-  fmap (map toDocUpdate) $ forM docs decodeFile
-  where toDocUpdate :: Document -> DocStat
-        toDocUpdate doc = DocStat (docId doc) (revision doc)
+  fmap (map toDocUpdate) $ forM docs (decodeFile . (chdbPath ++))
+    where toDocUpdate :: Document -> DocStat
+          toDocUpdate doc = DocStat (docId doc) (revision doc)
 
 docId2File :: DocId -> FilePath
 docId2File did = chdbPath ++ did ++ ".chdb"
@@ -127,6 +127,7 @@ getRequest :: GetDoc -> Process ProcessId
 getRequest (GetDoc did response) = spawnLocal handler
     where handler = do
             doc <- liftIO $ getDoc did
+            say $ "got " ++ (show did)
             sendChan response $ Just doc -- send the doc to the client.
 
 -- | Handle a PutDoc request.
@@ -134,7 +135,7 @@ putRequest :: ProcessId -> PutDoc -> Process ProcessId
 putRequest mPid (PutDoc doc resp) = do
   self       <- getSelfPid
   handlerPid <- spawnLocal $ handler self
-  link handlerPid
+--  link handlerPid
   return handlerPid
     where handler slPid = do
             rslt <- liftIO $ putDoc doc
@@ -142,10 +143,10 @@ putRequest mPid (PutDoc doc resp) = do
               NewVer stat@(DocStat _ rev) -> do
                 send mPid (DocUpdate stat slPid)
                 sendChan resp (Right rev)
-                unlink slPid -- XXX
+--                unlink slPid -- XXX
               Conflict -> do
                 sendChan resp (Left "document version conflict")
-                unlink slPid -- XXX
+--                unlink slPid -- XXX
 
 -- | Handle a document replication request.
 --   TODO: There is no confirmation that the replication succeeded, might 
@@ -183,6 +184,7 @@ initSlave :: ProcessId -> Process ()
 initSlave mPid = do
   self  <- getSelfPid
   docls <- liftIO $ getDocList
+  say $ "got doc list: " ++ (show docls)
   forM_ docls $ \du -> send mPid (DocUpdate du self)
   say $ "slave started on " ++ (show self)
   slave mPid
