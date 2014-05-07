@@ -170,8 +170,8 @@ stat did = do
     return $ Just (DocStat did ver)
   else return Nothing
 
-replicator :: DocStat -> ProcessId -> Process ()
-replicator (DocStat did ver) mPid = do
+replicator :: (DocStat, ProcessId) -> Process ()
+replicator ((DocStat did ver), mPid) = do
   mDocStat <- liftIO $ stat did
   case mDocStat of
     Just (DocStat _ localVer) ->
@@ -239,12 +239,21 @@ initMaster slaves = do
     spawnLink nid ($(mkClosure 'initSlave) self)
   say "starting master"
   index <- populateIndex HM.empty
---  spawnLocal $ makeConsistent index
+  say $ "initial index " ++ (show index)
+  spawnLocal $ makeConsistent index self
   master index $ toCircularQueue slavePids
     where populateIndex index = do
             mUpdate <- expectTimeout 200000
             case mUpdate of
-              Nothing   -> return index
-              (Just du) ->
+              Nothing -> return index
+              Just du ->
                   populateIndex $ updateIndex index du
-                      
+          makeConsistent :: DocumentIndex -> ProcessId -> Process ()
+          makeConsistent index mPid = do
+            let docList = HM.assocs index
+            forM_ docList $ \(did, (ver, (owner:others))) -> 
+                mapM_ (\nid -> 
+                           spawn nid ($(mkClosure 'replicator) 
+                                           (DocStat did ver, mPid)))
+                                . map processNodeId $ others
+
