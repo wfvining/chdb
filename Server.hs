@@ -133,47 +133,21 @@ getRequest (GetDoc did response) = spawnLocal handler
 -- | Handle a PutDoc request.
 putRequest :: ProcessId -> PutDoc -> Process ProcessId
 putRequest mPid (PutDoc doc resp) = do
-  self       <- getSelfPid
-  handlerPid <- spawnLocal $ handler self
---  link handlerPid
-  return handlerPid
+  self <- getSelfPid
+  spawnLocal $ handler self
     where handler slPid = do
             rslt <- liftIO $ putDoc doc
             case rslt of
               NewVer stat@(DocStat _ rev) -> do
                 send mPid (DocUpdate stat slPid)
                 sendChan resp (Right rev)
---                unlink slPid -- XXX
               Conflict -> do
                 sendChan resp (Left "document version conflict")
---                unlink slPid -- XXX
-
--- | Handle a document replication request.
---   TODO: There is no confirmation that the replication succeeded, might 
---   want to implement that.
-replicateDoc :: Replicate -> Process ProcessId
-replicateDoc (SendTo did pid) = do
-  self <- getSelfPid
-  hPid <- spawnLocal sendHandler
-  return hPid
-    where sendHandler = do
-            doc <- liftIO $ getDoc did -- XXX: Should I use a bang pattern here?
-            send pid (Replica doc)
-replicateDoc (Replica doc) = do
-  self <- getSelfPid
-  pid  <- spawnLocal receiveHandler
-  return pid
-    where receiveHandler = do
-            rslt <- liftIO $ putDoc doc
-            case rslt of
-              NewVer _ -> return ()
-              Conflict -> die "replication conflict."
 
 slave :: ProcessId -> Process ()
 slave mPid = forever $
   receiveWait [ match (putRequest mPid)
-              , match getRequest 
-              , match replicateDoc ]
+              , match getRequest ]
   
 -- | initialize a slave process by collecing the list of documents
 -- | it has and sending them to the master. 
@@ -186,8 +160,37 @@ initSlave mPid = do
   say $ "slave started on " ++ (show self)
   slave mPid
 
+stat :: DocId -> IO (Maybe DocStat)
+stat did = do
+  let fname = docId2File did
+  fileExists <- doesFileExist fname
+  if fileExists 
+  then do
+    (Doc _ ver _) <- decodeFile fname
+    return $ Just (DocStat did ver)
+  else return Nothing
+
+replicator :: DocStat -> ProcessId -> Process ()
+replicator (DocStat did ver) mPid = do
+  mDocStat <- liftIO $ stat did
+  case mDocStat of
+    Just (DocStat _ localVer) ->
+        if localVer == ver
+        then return () -- already up to date
+        else if localVer < ver 
+             then storeReplica 
+             else kill mPid "replication conflict" -- XXX: is this a good idea?
+    Nothing -> storeReplica
+    where storeReplica = do
+                  let fname = docId2File did
+                  (sMaybeDoc, rMaybeDoc) <- newChan
+                  send mPid $ GetDoc did sMaybeDoc
+                  Just doc <- receiveChan rMaybeDoc
+                  liftIO $ encodeFile (fname ++ ".tmp") doc
+                  liftIO $ renameFile (fname ++ ".tmp") fname
+
 -- remotable needs to come before any use of mkClosure
-remotable ['initSlave]
+remotable ['initSlave, 'replicator]
 
 type DocumentIndex = HM.Map DocId (DocRevision, [ProcessId])
 
@@ -208,7 +211,8 @@ master index slaves =
     where docUpdate :: DocUpdate -> 
                        Process (DocumentIndex, CircularQueue ProcessId)
           docUpdate du  = return ((updateIndex index du), slaves)
-          
+
+-- TODO: abstract the pattern in the next two functions.          
           docGetRequest :: GetDoc -> 
                            Process (DocumentIndex, CircularQueue ProcessId)
           docGetRequest get@(GetDoc did resp) =
@@ -235,6 +239,7 @@ initMaster slaves = do
     spawnLink nid ($(mkClosure 'initSlave) self)
   say "starting master"
   index <- populateIndex HM.empty
+--  spawnLocal $ makeConsistent index
   master index $ toCircularQueue slavePids
     where populateIndex index = do
             mUpdate <- expectTimeout 200000
