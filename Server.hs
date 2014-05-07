@@ -252,8 +252,10 @@ initMaster slaves = do
           makeConsistent index mPid = do
             let docList = HM.assocs index
             forM_ docList $ \(did, (ver, (owner:others))) -> 
-                mapM_ (\nid -> 
-                           spawn nid ($(mkClosure 'replicator) 
-                                           (DocStat did ver, mPid)))
-                                . map processNodeId $ others
+                if others == [] 
+                then send mPid $ DocUpdate (DocStat did ver) owner
+                else mapM_ (\nid -> 
+                                spawn nid ($(mkClosure 'replicator) 
+                                                (DocStat did ver, mPid)))
+                         . map processNodeId $ others
 
