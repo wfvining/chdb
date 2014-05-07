@@ -7,11 +7,7 @@ module Messages
        ) where
 
 import Control.Distributed.Process
-  ( SendPort(..)
-  , ReceivePort(..)
-  , ProcessId(..)
-  )
-import Control.Distributed.Static -- ? for Closure... is this right?
+import Control.Distributed.Process.Closure
 import Data.Binary
 import Data.Typeable
 
