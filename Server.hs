@@ -154,22 +154,19 @@ putRequest mPid (PutDoc doc resp) = do
 replicateDoc :: Replicate -> Process ProcessId
 replicateDoc (SendTo did pid) = do
   self <- getSelfPid
-  hPid <- spawnLocal $ sendHandler self
-  link hPid
+  hPid <- spawnLocal sendHandler
   return hPid
-    where sendHandler slPid = do
+    where sendHandler = do
             doc <- liftIO $ getDoc did -- XXX: Should I use a bang pattern here?
             send pid (Replica doc)
-            unlink slPid
 replicateDoc (Replica doc) = do
   self <- getSelfPid
-  pid  <- spawnLocal $ receiveHandler self
-  link pid -- XXX: maybe linking after pid is done...
+  pid  <- spawnLocal receiveHandler
   return pid
-    where receiveHandler slPid = do
+    where receiveHandler = do
             rslt <- liftIO $ putDoc doc
             case rslt of
-              NewVer _ -> unlink slPid -- unlink and finish.
+              NewVer _ -> return ()
               Conflict -> die "replication conflict."
 
 slave :: ProcessId -> Process ()
@@ -218,7 +215,7 @@ master index slaves =
             case HM.lookup did index of
               (Just (_, (p:_))) -> send p get >> return (index, slaves)
               Nothing           -> 
-                sendChan resp Nothing >> return (index, slaves)
+                sendChan resp Nothing         >> return (index, slaves)
           
           docPutRequest :: PutDoc -> 
                            Process (DocumentIndex, CircularQueue ProcessId)
@@ -237,5 +234,12 @@ initMaster slaves = do
   slavePids <- forM slaves $ \nid ->
     spawnLink nid ($(mkClosure 'initSlave) self)
   say "starting master"
-  master HM.empty $ toCircularQueue slavePids
-
+  index <- populateIndex HM.empty
+  master index $ toCircularQueue slavePids
+    where populateIndex index = do
+            mUpdate <- expectTimeout 200000
+            case mUpdate of
+              Nothing   -> return index
+              (Just du) ->
+                  populateIndex $ updateIndex index du
+                      

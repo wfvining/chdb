@@ -36,7 +36,6 @@ dispatch "master" host _ = do
   putStrLn "Starting server"
   backend <- initializeBackend host chdbMasterPort chdbRemoteTable
   startMaster backend initMaster
-  -- todo, find slave NodeIds, spawn Server.master.
 dispatch "client" host [port] = do
   putStrLn "starting chdb client"
   clientShell host port
