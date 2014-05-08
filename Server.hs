@@ -194,14 +194,16 @@ remotable ['initSlave, 'replicator]
 
 type DocumentIndex = HM.Map DocId (DocRevision, [ProcessId])
 
+-- TODO: is there a better way to prevent duplicate pids in the 
+--       pid lists?
 updateIndex :: DocumentIndex -> DocUpdate -> DocumentIndex
 updateIndex index (DocUpdate (DocStat did ver) pid) = 
     if HM.member did index
     then HM.insertWith insDuplicate did (ver, [pid]) index
     else HM.insert did (ver, [pid]) index
         where insDuplicate (newVer, ps) (oldVer, ps')
-                  | newVer > oldVer = (newVer, ps ++ ps')
-                  | otherwise       = (oldVer, ps' ++ ps)
+                  | newVer > oldVer = (newVer, ps ++ filter (/= (head ps)) ps')
+                  | otherwise       = (oldVer, (filter (/= (head ps)) ps')++ ps)
 
 master :: DocumentIndex -> CircularQueue ProcessId -> Process ()
 master index slaves =
@@ -210,9 +212,18 @@ master index slaves =
               , match docPutRequest ] >>= (uncurry master)
     where docUpdate :: DocUpdate -> 
                        Process (DocumentIndex, CircularQueue ProcessId)
-          docUpdate du@(DocUpdate ds _) = do
-            say $ "Got update for " ++ (show ds)
-            return ((updateIndex index du), slaves)
+          docUpdate du@(DocUpdate (DocStat did _) _) = do
+            masterPid <- getSelfPid
+            let index' = updateIndex index du
+                (Just (ver, ps)) = HM.lookup did index'
+            if ps == [] 
+            then spawn (processNodeId . peek $ slaves)
+                       ($(mkClosure 'replicator) (DocStat did ver, masterPid))
+                   >> return () -- This looks like a bad idea... 12AM, 2 beers
+            else mapM_ (flip spawn ($(mkClosure 'replicator) 
+                                         (DocStat did ver, masterPid)))
+                     . map processNodeId $ ps
+            return (index', slaves)
 
 -- TODO: abstract the pattern in the next two functions.          
           docGetRequest :: GetDoc -> 
