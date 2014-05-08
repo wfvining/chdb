@@ -210,7 +210,9 @@ master index slaves =
               , match docPutRequest ] >>= (uncurry master)
     where docUpdate :: DocUpdate -> 
                        Process (DocumentIndex, CircularQueue ProcessId)
-          docUpdate du  = return ((updateIndex index du), slaves)
+          docUpdate du@(DocUpdate ds _) = do
+            say $ "Got update for " ++ (show ds)
+            return ((updateIndex index du), slaves)
 
 -- TODO: abstract the pattern in the next two functions.          
           docGetRequest :: GetDoc -> 
