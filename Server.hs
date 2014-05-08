@@ -172,6 +172,7 @@ stat did = do
 
 replicator :: (DocStat, ProcessId) -> Process ()
 replicator ((DocStat did ver), mPid) = do
+  liftIO $ putStrLn "replicator sapwned"
   mDocStat <- liftIO $ stat did
   case mDocStat of
     Just (DocStat _ localVer) ->
