@@ -216,9 +216,9 @@ master index slaves =
           docUpdate du@(DocUpdate (DocStat did _) _) = do
             masterPid <- getSelfPid
             let index' = updateIndex index du
-                (Just (ver, ps)) = HM.lookup did index'
+                (Just (ver, ps@(p:_))) = HM.lookup did index'
             if length ps <= 1
-            then spawn (processNodeId . peek . filterq (/= head ps) $ slaves)
+            then spawn (chooseReplicaLocation p slaves)
                        ($(mkClosure 'replicator) (DocStat did ver, masterPid))
                    >> return () -- This looks like a bad idea... 12AM, 2 beers
             else mapM_ (flip spawn ($(mkClosure 'replicator) 
@@ -226,6 +226,10 @@ master index slaves =
                      . map processNodeId $ ps
             return (index', slaves)
 
+          chooseReplicaLocation pid slaves = processNodeId $ 
+              case filter (/= pid) . qToList $ slaves of
+                [] -> pid
+                (p:_) -> p
 -- TODO: abstract the pattern in the next two functions.          
           docGetRequest :: GetDoc -> 
                            Process (DocumentIndex, CircularQueue ProcessId)
