@@ -217,9 +217,8 @@ master index slaves =
             masterPid <- getSelfPid
             let index' = updateIndex index du
                 (Just (ver, ps)) = HM.lookup did index'
-                (_, slaves') = next slaves
-            if ps == [] 
-            then spawn (processNodeId . peek $ slaves')
+            if length ps <= 1
+            then spawn (processNodeId . peek . filterq (/= head ps) $ slaves)
                        ($(mkClosure 'replicator) (DocStat did ver, masterPid))
                    >> return () -- This looks like a bad idea... 12AM, 2 beers
             else mapM_ (flip spawn ($(mkClosure 'replicator) 
