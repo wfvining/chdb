@@ -4,6 +4,7 @@ module CircularQueue
        , next
        , peek
        , insert
+       , filterq
        , toCircularQueue
        , CircularQueue(..)
        ) where
@@ -33,6 +34,9 @@ remove :: CircularQueue a -> (a, CircularQueue a)
 remove (CQ [] [])     = error "empty queue"
 remove (CQ [] ys)     = remove $ CQ (reverse ys) []
 remove (CQ (x:xs) ys) = (x, CQ xs ys)
+
+filterq :: (a -> Bool) -> CircularQueue a -> CircularQueue a
+filterq pred (CQ xs ys) = CQ (filter pred xs) (filter pred ys)
 
 -- | create a queue containing all the elements in a list.
 toCircularQueue :: [a] -> CircularQueue a
