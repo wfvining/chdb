@@ -172,7 +172,7 @@ stat did = do
 
 replicator :: (DocStat, ProcessId) -> Process ()
 replicator ((DocStat did ver), mPid) = do
-  liftIO $ putStrLn "replicator sapwned"
+  liftIO $ putStrLn $ "replicator sapwned for " ++ (show did)
   mDocStat <- liftIO $ stat did
   case mDocStat of
     Just (DocStat _ localVer) ->
@@ -217,8 +217,9 @@ master index slaves =
             masterPid <- getSelfPid
             let index' = updateIndex index du
                 (Just (ver, ps)) = HM.lookup did index'
+                (_, slaves') = next slaves
             if ps == [] 
-            then spawn (processNodeId . peek $ slaves)
+            then spawn (processNodeId . peek $ slaves')
                        ($(mkClosure 'replicator) (DocStat did ver, masterPid))
                    >> return () -- This looks like a bad idea... 12AM, 2 beers
             else mapM_ (flip spawn ($(mkClosure 'replicator) 
