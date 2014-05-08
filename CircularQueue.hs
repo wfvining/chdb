@@ -6,6 +6,7 @@ module CircularQueue
        , insert
        , filterq
        , toCircularQueue
+       , qToList
        , CircularQueue(..)
        ) where
 
@@ -41,3 +42,5 @@ filterq pred (CQ xs ys) = CQ (filter pred xs) (filter pred ys)
 -- | create a queue containing all the elements in a list.
 toCircularQueue :: [a] -> CircularQueue a
 toCircularQueue = CQ []
+
+qToList (CQ xs ys) = xs ++ (reverse ys)
