@@ -148,6 +148,7 @@ putRequest mPid (PutDoc doc resp) = do
               Conflict -> do
                 sendChan resp (Left "document version conflict")
 
+-- | the seemingly-too-simple slave process.
 slave :: ProcessId -> Process ()
 slave mPid = forever $
   receiveWait [ match (putRequest mPid)
@@ -164,6 +165,7 @@ initSlave mPid = do
   say $ "slave started on " ++ (show self)
   slave mPid
 
+-- | get stats about a document on the local node.
 stat :: DocId -> IO (Maybe DocStat)
 stat did = do
   let fname = docId2File did
@@ -174,6 +176,7 @@ stat did = do
     return $ Just (DocStat did ver)
   else return Nothing
 
+-- | a process to replicate a document to the node it is spawned on.
 replicator :: (DocStat, ProcessId) -> Process ()
 replicator r@((DocStat did ver), mPid) = do
   self <- getSelfPid
