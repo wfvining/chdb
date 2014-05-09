@@ -8,6 +8,10 @@ module Server
     , __remoteTable
     ) where
 
+import System.Random (randomRIO)
+
+import Control.Concurrent (threadDelay)
+
 import Control.Distributed.Process
 import Control.Distributed.Process.Closure
 
@@ -171,24 +175,38 @@ stat did = do
   else return Nothing
 
 replicator :: (DocStat, ProcessId) -> Process ()
-replicator ((DocStat did ver), mPid) = do
+replicator r@((DocStat did ver), mPid) = do
+  self <- getSelfPid
   liftIO $ putStrLn $ "replicator sapwned for " ++ (show did)
-  mDocStat <- liftIO $ stat did
-  case mDocStat of
-    Just (DocStat _ localVer) ->
-        if localVer == ver
-        then return () -- already up to date
-        else if localVer < ver 
-             then storeReplica 
-             else kill mPid "replication conflict" -- XXX: is this a good idea?
-    Nothing -> storeReplica
-    where storeReplica = do
+
+  regrslt <- try $ register ("replicator" ++ did) self
+
+  case regrslt of
+    Left (ProcessRegistrationException _) -> 
+        replicatorRunningHandler >> replicator r
+    Right _ -> go >> unregister ("replicator"++did)
+    where go = do
+            mDocStat <- liftIO $ stat did
+            case mDocStat of
+              Just (DocStat _ localVer) ->
+                  if localVer == ver
+                  then return () -- already up to date
+                  else if localVer < ver 
+                       then storeReplica 
+                       else say "replication conflict"
+              Nothing -> storeReplica
+
+          storeReplica = do
                   let fname = docId2File did
                   (sMaybeDoc, rMaybeDoc) <- newChan
                   send mPid $ GetDoc did sMaybeDoc
                   Just doc <- receiveChan rMaybeDoc
                   liftIO $ encodeFile (fname ++ ".tmp") doc
                   liftIO $ renameFile (fname ++ ".tmp") fname
+
+          replicatorRunningHandler = do
+            sleepTime <- liftIO $ randomRIO (100,1000)
+            liftIO $ threadDelay sleepTime -- Sleep a random time and try again
 
 -- remotable needs to come before any use of mkClosure
 remotable ['initSlave, 'replicator]
