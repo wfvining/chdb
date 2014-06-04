@@ -1,3 +1,9 @@
+`chdb` is a simple distributed document storage system. It was written as
+a toy to play with Cloud Haskell. The system provides methods to store 
+documents, and handles conflicts through simple multi version concurrency
+control. The goal is to provide high availability, concurrency, and fault
+tolerance.
+
 Master
 ======
 
